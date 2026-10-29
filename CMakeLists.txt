@@ -72,8 +72,17 @@ target_compile_options(grove PRIVATE -O2 -Wall -Wno-unused-function -Wno-missing
 set_target_properties(grove PROPERTIES ENABLE_EXPORTS ON
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 if(WIN32)
-  # ffi.C on Windows looks the gr_* functions up in the .exe's export table; static C/C++ runtimes
-  # keep the build to a single grove.exe.
-  target_link_options(grove PRIVATE -Wl,--export-all-symbols -static)
+  # ffi.C on Windows looks the gr_* functions up in the .exe's export table, so export every
+  # function api.h declares through a generated .def file. Static runtimes keep it to one grove.exe.
+  file(READ ${CMAKE_SOURCE_DIR}/engine/api.h GROVE_API)
+  string(REGEX MATCHALL "gr_[a-z0-9_]+[ ]*\\(" GROVE_FUNCS "${GROVE_API}")
+  set(GROVE_DEF "EXPORTS\n")
+  foreach(f ${GROVE_FUNCS})
+    string(REGEX REPLACE "[ (]" "" f "${f}")
+    string(APPEND GROVE_DEF "  ${f}\n")
+  endforeach()
+  file(WRITE ${CMAKE_BINARY_DIR}/grove.def "${GROVE_DEF}")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/engine/api.h)
+  target_link_options(grove PRIVATE ${CMAKE_BINARY_DIR}/grove.def -static)
   set_target_properties(grove PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()

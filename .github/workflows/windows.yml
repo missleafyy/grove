@@ -27,7 +27,7 @@ jobs:
           echo "ZIG=$HOME/zig/zig-x86_64-linux-0.17.0/zig" >> "$GITHUB_ENV"
 
       - name: Build
-        run: tools/windows/build.sh carl4
+        run: tools/windows/build.sh carl4 "CARL 4"
 
       - uses: actions/upload-artifact@v4
         with:
