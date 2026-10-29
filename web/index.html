@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skylight Isle</title>
+<style>
+@font-face { font-family: 'Grove'; font-weight: 400; src: url(data:font/woff;base64,__FONT_REGULAR__) format('woff'); }
+@font-face { font-family: 'Grove'; font-weight: 700; src: url(data:font/woff;base64,__FONT_BOLD__) format('woff'); }
+:root {
+  --panel: rgba(20, 27, 38, 0.82); --border: rgba(255, 255, 255, 0.08); --cream: #fff6e0; --dim: #a9b4c2;
+  --mint: #7ee0b4; --button: #243042; --button-hover: #2f3f57;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1230; font-family: 'Grove', system-ui, sans-serif; color: var(--cream); user-select: none; -webkit-user-select: none; }
+canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+.layer { position: fixed; inset: 0; pointer-events: none; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+.shadow { text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+button.gb {
+  pointer-events: auto; font: 700 18px 'Grove', sans-serif; color: var(--cream); background: var(--button);
+  border: 1px solid var(--border); border-radius: 12px; width: 280px; height: 48px; cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); transition: background 0.12s, transform 0.12s;
+}
+button.gb:hover, button.gb:focus-visible { background: var(--button-hover); transform: translateY(-1px); outline: none; }
+button.gb:active { transform: translateY(1px); }
+button.gb.big { height: 54px; font-size: 22px; width: 260px; }
+
+/* in-game HUD */
+#hud { opacity: 0; transition: opacity 0.5s; }
+#counter { position: absolute; left: 24px; top: 24px; width: 190px; height: 58px; display: flex; align-items: center; }
+#counter .icon { position: relative; width: 26px; height: 26px; margin: 0 18px 0 30px; }
+#counter .icon::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; background: rgba(126, 224, 180, 0.18); }
+#counter .icon::after { content: ''; position: absolute; left: 6px; top: 0; width: 14px; height: 26px; border-radius: 7px; background: var(--mint);
+  box-shadow: inset 4px 3px 0 -1px rgba(255, 255, 255, 0.7); }
+#count { font-size: 32px; font-weight: 700; display: inline-block; transform-origin: left center; }
+#total { font-size: 20px; color: var(--dim); font-weight: 700; margin-left: 8px; margin-top: 8px; }
+#clock { position: absolute; right: 24px; top: 24px; width: 150px; height: 58px; display: flex; align-items: center; }
+#sun { width: 22px; height: 22px; border-radius: 50%; margin: 0 18px 0 21px; background: #ffd36b; box-shadow: 0 0 0 4px rgba(255, 211, 107, 0.25); }
+#sun.moon { background: #dfe7ff; box-shadow: none; -webkit-mask: radial-gradient(circle at 75% 30%, transparent 9px, #000 10px); mask: radial-gradient(circle at 75% 30%, transparent 9px, #000 10px); }
+#time { font-size: 28px; font-weight: 700; }
+#lapse { position: absolute; right: 24px; top: 86px; width: 150px; padding-left: 56px; font-size: 14px; color: var(--mint); font-weight: 700; display: none; }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.35); display: none; }
+#crosshair::after { content: ''; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); }
+#hints { position: absolute; left: 24px; bottom: 24px; width: 250px; padding: 10px 0; border-radius: 14px; }
+#hints div { display: flex; align-items: center; height: 26px; padding-left: 12px; font-size: 15px; }
+#hints kbd { font: 700 15px 'Grove', sans-serif; background: rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 1px 8px; margin-right: 10px; color: var(--cream); }
+#hints span { color: var(--dim); }
+#toasts { position: absolute; top: 104px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.toast { padding: 10px 24px 12px; text-align: center; position: relative; overflow: hidden; min-width: 220px; }
+.toast::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--mint); }
+.toast b { display: block; font-size: 26px; }
+.toast small { display: block; font-size: 16px; color: var(--dim); margin-top: 4px; }
+#clickhint { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); padding: 10px 20px; font-size: 16px; display: none; }
+
+/* title */
+#title { transition: opacity 0.4s; }
+#title .top { position: absolute; left: 0; right: 0; top: 0; height: 50%; background: linear-gradient(rgba(0, 0, 0, 0.35), transparent); }
+#title .bot { position: absolute; left: 0; right: 0; bottom: 0; height: 45%; background: linear-gradient(transparent, rgba(0, 0, 0, 0.55)); }
+#logo { position: absolute; left: 0; right: 0; top: 16vh; text-align: center; font-size: clamp(64px, 12vw, 120px); font-weight: 700; letter-spacing: 10px; line-height: 1.1; }
+#logo span { display: inline-block; -webkit-text-stroke: 4px rgba(29, 77, 60, 0.6); paint-order: stroke fill; text-shadow: 4px 6px 0 rgba(0, 0, 0, 0.25); }
+#subtitle { position: absolute; left: 0; right: 0; top: calc(16vh + 150px); text-align: center; font-size: 22px; }
+#menu { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 14px; align-items: center; }
+#tagline { position: absolute; left: 0; right: 0; bottom: 56px; text-align: center; font-size: 17px; color: rgba(255, 255, 255, 0.8); }
+
+/* pause / victory */
+#pause { background: rgba(8, 13, 20, 0.55); display: none; }
+#pause .panel, #victory { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 24px 40px; display: flex; flex-direction: column; gap: 12px; align-items: center; pointer-events: auto; }
+#pause h2, #victory h2 { margin: 0 0 6px; font-size: 34px; }
+#victory { display: none; opacity: 0; transition: opacity 0.4s; width: min(520px, 92vw); padding: 30px; text-align: center; }
+#victory h2 { font-size: 38px; }
+#victory p { margin: 0; color: var(--dim); font-size: 19px; }
+
+#labels .label3d { position: absolute; left: 0; top: 0; white-space: nowrap; font-weight: 700; display: none;
+  -webkit-text-stroke: 3px rgba(0, 0, 0, 0.8); paint-order: stroke fill; }
+#stats { position: absolute; right: 24px; bottom: 24px; padding: 10px 14px; font: 13px ui-monospace, monospace; color: var(--dim); display: none; white-space: pre; }
+#loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: radial-gradient(circle at 50% 40%, #1d4d3c, #0b1230 70%); transition: opacity 0.6s; z-index: 10; }
+#loading .t { font-size: 64px; font-weight: 700; letter-spacing: 8px; -webkit-text-stroke: 3px rgba(29, 77, 60, 0.6); paint-order: stroke fill; }
+#loading .s { color: var(--dim); font-size: 18px; }
+#loading .bar { width: 240px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+#loading .bar i { display: block; height: 100%; width: 0; background: var(--mint); transition: width 0.2s; }
+#error { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #0b1230; z-index: 20; font-size: 18px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<canvas id="view" tabindex="0"></canvas>
+<div id="labels" class="layer"></div>
+
+<div id="hud" class="layer">
+  <div id="counter" class="panel"><div class="icon"></div><span id="count" class="shadow">0</span><span id="total">/ 12</span></div>
+  <div id="clock" class="panel"><div id="sun"></div><span id="time" class="shadow">16:12</span></div>
+  <div id="lapse">time-lapse</div>
+  <div id="crosshair"></div>
+  <div id="hints" class="panel">
+    <div><kbd>WASD</kbd><span>move</span></div>
+    <div><kbd>Mouse</kbd><span>look</span></div>
+    <div><kbd>Space</kbd><span>jump (twice!)</span></div>
+    <div><kbd>Shift</kbd><span>sprint</span></div>
+    <div><kbd>Click</kbd><span>throw spark orb</span></div>
+    <div><kbd>T</kbd><span>time-lapse</span></div>
+    <div><kbd>F3</kbd><span>engine stats</span></div>
+    <div><kbd>Esc</kbd><span>pause</span></div>
+  </div>
+  <div id="toasts"></div>
+  <div id="clickhint" class="panel">Click to look around</div>
+  <div id="stats" class="panel"></div>
+</div>
+
+<div id="title" class="layer">
+  <div class="top"></div><div class="bot"></div>
+  <div id="logo"></div>
+  <div id="subtitle" class="shadow">a little 3D engine &nbsp;·&nbsp; showcase: Skylight Isle</div>
+  <div id="menu">
+    <button class="gb big" id="b-play">Play</button>
+    <button class="gb" id="b-full" style="width:260px">Fullscreen</button>
+  </div>
+  <div id="tagline" class="shadow">Find all 12 crystals. Explore, climb the sky islands, knock things over.</div>
+</div>
+
+<div id="pause" class="layer">
+  <div class="panel">
+    <h2>Paused</h2>
+    <button class="gb" id="b-resume">Resume</button>
+    <button class="gb" id="b-fast">Time-lapse:  Off</button>
+    <button class="gb" id="b-shadows">Shadows:  On</button>
+    <button class="gb" id="b-bloom">Bloom:  On</button>
+    <button class="gb" id="b-full2">Fullscreen</button>
+  </div>
+</div>
+
+<div id="victory" class="panel">
+  <h2>All crystals found!</h2>
+  <p id="v-time">Time: 0:00</p>
+  <p style="font-size:18px">Thanks for playing the Grove showcase.</p>
+  <button class="gb" id="b-keep" style="width:260px;margin-top:8px">Keep exploring</button>
+</div>
+
+<div id="loading"><div class="t">GROVE</div><div class="bar"><i></i></div><div class="s">Growing the island…</div></div>
+<div id="error"></div>
+<script>__SCRIPT__</script>
+</body>
+</html>
