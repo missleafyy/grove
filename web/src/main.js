@@ -74,6 +74,7 @@ async function boot() {
   const rig = new CameraRig(scene, player, camera);
   player.rig = rig;
   const hud = createHud(ctl);
+  window.__skylight = { ctl, player, rig, camera };   // debug handle for automated checks
   const musicVol = { v: 0 };
   tween(musicVol, { v: 0.55 }, 4, { ease: 'linear', real: true });
 
@@ -126,10 +127,6 @@ async function boot() {
     Input.captureMouse(true);
     player.locked = false;
   };
-  document.addEventListener('pointerlockchange', () => {
-    // Browsers swallow Esc to release the mouse, so losing the lock mid-play means "pause".
-    if (!document.pointerLockElement && ctl.state === 'play' && !ctl.victoryOpen && rig.mode === 'follow' && !SHOT) ctl.pause();
-  });
 
   function onCollected(c) {
     ctl.collected++;
@@ -211,7 +208,7 @@ async function boot() {
   const shot = SHOT ? shotScene(SHOT, { ctl, player, rig, daynight, root }) : null;
 
   function tick(now) {
-    const dtReal = shot ? 1 / 60 : Math.min((now - last) / 1000, 0.1);
+    const dtReal = shot ? 1 / (Number(params.get('fps')) || 60) : Math.min((now - last) / 1000, 0.1);
     last = now;
     Input.poll();
     G.realTime += dtReal;
@@ -288,6 +285,11 @@ function shotScene(name, { ctl, player, rig, daynight }) {
       if (f === 29) jumpProbe.y0 = player.position.y;
       if (f > 30) jumpProbe.max = Math.max(jumpProbe.max || 0, player.position.y - jumpProbe.y0);
       if (f === 119) console.log('jump apex', jumpProbe.max.toFixed(2), 'grounded', player.isOnFloor());
+    } },
+    walk: { frames: 200, each(f) {
+      Input.strength = (a) => (a === 'move_forward' && f >= 20 ? 1 : 0);
+      if (f === 20) jumpProbe.p0 = player.position.clone();
+      if (f === 199) console.log('walked', player.position.distanceTo(jumpProbe.p0).toFixed(2), 'grounded', player.isOnFloor(), 'y', player.position.y.toFixed(2), 'ground', World.height(player.position.x, player.position.z).toFixed(2));
     } },
     pad: { frames: 200, setup() { player.teleport(V(z.plaza.x + 8, z.plaza.h + 0.4, z.plaza.z + 8)); }, each(f) {
       jumpProbe.max = Math.max(jumpProbe.max || 0, player.position.y);
