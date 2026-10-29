@@ -1,9 +1,14 @@
 // Grove engine entry point: window, main loop, Lua host.
 #include "core.hpp"
 #include <GLFW/glfw3.h>
-#include <unistd.h>
-#include <sys/stat.h>
 #include <chrono>
+#include <filesystem>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 #include <ctime>
 #include <fstream>
 #include <sstream>
@@ -114,28 +119,55 @@ static void do_restart() {
 }
 
 // ------------------------------------------------------------- main
+namespace fs = std::filesystem;
+
+// Paths are handed to Lua with forward slashes on every platform (Windows accepts them too).
+static std::string slashes(std::string p) {
+  for (char& c : p) if (c == '\\') c = '/';
+  return p;
+}
+
 static std::string exe_dir() {
+#ifdef _WIN32
+  wchar_t buf[4096];
+  DWORD n = GetModuleFileNameW(nullptr, buf, 4096);
+  if (n == 0 || n >= 4096) return ".";
+  return slashes(fs::path(buf).parent_path().u8string());
+#else
   char buf[4096];
   ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
   if (n <= 0) return ".";
   buf[n] = 0;
   std::string p(buf);
   return p.substr(0, p.find_last_of('/'));
+#endif
 }
 
 static std::string abs_path(const std::string& p) {
-  char buf[4096];
-  if (realpath(p.c_str(), buf)) return buf;
-  return p;
+  std::error_code ec;
+  fs::path r = fs::weakly_canonical(fs::u8path(p), ec);
+  return ec ? p : slashes(r.u8string());
 }
 
 static bool dir_exists(const std::string& p) {
-  struct stat st;
-  return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+  std::error_code ec;
+  return fs::is_directory(fs::u8path(p), ec);
+}
+
+// With no game argument, run games/demo, or else the first game folder next to the engine
+// (so a packaged build can be started by double-clicking the executable).
+static std::string default_game() {
+  std::string games = g_engine_dir + "/../games";
+  if (dir_exists(games + "/demo")) return games + "/demo";
+  std::error_code ec;
+  for (auto& e : fs::directory_iterator(fs::u8path(games), ec))
+    if (e.is_directory() && fs::exists(e.path() / "main.lua")) return slashes(e.path().u8string());
+  return games + "/demo";
 }
 
 static std::string timestamp_shot_path() {
-  mkdir((g_game_dir + "/screenshots").c_str(), 0755);
+  std::error_code ec;
+  fs::create_directories(fs::u8path(g_game_dir + "/screenshots"), ec);
   char name[256];
   time_t t = time(nullptr);
   strftime(name, sizeof(name), "/screenshots/shot_%Y%m%d_%H%M%S.png", localtime(&t));
@@ -157,7 +189,7 @@ int main(int argc, char** argv) {
     else if (a == "--size" && i + 1 < argc) sscanf(argv[i + 1], "%dx%d", &width, &height);
     else if (a[0] != '-' && game.empty() && dir_exists(a)) game = a;
   }
-  if (game.empty()) game = g_engine_dir + "/../games/demo";
+  if (game.empty()) game = default_game();
   g_game_dir = abs_path(game);
   printf("[grove] engine: %s\n[grove] game:   %s\n", g_engine_dir.c_str(), g_game_dir.c_str());
 

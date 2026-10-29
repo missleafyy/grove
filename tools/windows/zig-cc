@@ -1,0 +1,3 @@
+#!/bin/sh
+# Cross compiler wrapper: zig cc targeting 64-bit Windows (MinGW ABI).
+exec "${ZIG:-zig}" cc -target x86_64-windows-gnu "$@"

@@ -72,6 +72,7 @@ uniform float u_roughness;
 uniform float u_metallic;
 uniform float u_rim;
 uniform vec2 u_uv_scale;
+uniform vec2 u_uv_offset;
 uniform float u_alpha_cutoff;
 uniform sampler2D u_albedo_tex;
 uniform int u_has_tex;
@@ -103,7 +104,7 @@ vec4 sample_albedo() {
     vec3 p = v_world * u_uv_scale.x;
     return texture(u_albedo_tex, p.zy) * n.x + texture(u_albedo_tex, p.xz) * n.y + texture(u_albedo_tex, p.xy) * n.z;
   }
-  return texture(u_albedo_tex, v_uv * u_uv_scale);
+  return texture(u_albedo_tex, v_uv * u_uv_scale + u_uv_offset);
 }
 
 #ifdef DEPTH
@@ -199,6 +200,49 @@ void main() {
   vec3 col;
   if (u_unshaded != 0) {
     col = base + emission;
+  } else if (u_effect == 3) {
+    // Pixel-art sprite: keeps its painted shading, only dims in shadow and takes the sun's tint.
+    float sh = sun_shadow(v_world, vec3(0.0, 1.0, 0.0), 1.0);
+    vec3 tint = u_sun_color / max(max(u_sun_color.r, u_sun_color.g), max(u_sun_color.b, 1e-3));
+    col = base * mix(vec3(1.0), tint, 0.25) * mix(0.58, 1.06, sh) + emission;
+  } else if (u_toon > 0.0 && u_effect != 1) {
+    // Cel shading: banded diffuse, a hard specular blob, and a crisp rim on the lit side.
+    vec3 L = -u_sun_dir;
+    float ndl = dot(N, L);
+    float sh = ndl > 0.0 ? sun_shadow(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), ndl) : 0.0;
+    float lit = toon_ramp(max(ndl, 0.0) * 1.6 * sh);
+    vec3 diffuse = base * (1.0 - metal * 0.6);
+    col = diffuse * u_sun_color * lit / PI * 1.6;
+    vec3 H = normalize(V + L);
+    float gloss = 1.0 - rough;
+    float sp = pow(max(dot(N, H), 0.0), mix(8.0, 160.0, gloss));
+    float spw = max(fwidth(sp), 1e-3);
+    col += u_sun_color * smoothstep(0.5 - spw, 0.5 + spw, sp) * gloss * gloss * 0.35 * sh * mix(vec3(1.0), base, metal);
+    for (int i = 0; i < u_num_lights; i++) {
+      vec3 dl = u_lpos[i].xyz - v_world;
+      float d = length(dl);
+      float range = u_lpos[i].w;
+      if (d > range) continue;
+      vec3 Ld = dl / d;
+      float x = d / range;
+      float att = clamp(1.0 - x * x, 0.0, 1.0);
+      if (u_lcol[i].w > 0.5) {
+        float cd = dot(-Ld, normalize(u_ldir[i].xyz));
+        float outer = u_ldir[i].w;
+        float inner = mix(1.0, outer, 1.0 - u_lsoft[i]);
+        att *= clamp((cd - outer) / max(inner - outer, 1e-3), 0.0, 1.0);
+      }
+      col += diffuse * u_lcol[i].rgb * toon_ramp(max(dot(N, Ld), 0.0) * att) / PI * 1.6;
+    }
+    // Flat two-tone ambient so shadow sides keep their colour instead of going muddy.
+    vec3 amb = mix(mix(u_ground, u_sky_horizon, 0.6), u_sky_top * 0.5 + u_sky_horizon * 0.5, step(0.0, N.y));
+    col += diffuse * amb * u_ambient_energy * 0.42;
+    float ndv = max(dot(N, V), 0.0);
+    float rim = 1.0 - ndv;
+    float rw = max(fwidth(rim), 1e-3);
+    float rim_mask = smoothstep(0.72 - rw, 0.72 + rw, rim) * clamp(ndl * 2.0 + 0.3, 0.0, 1.0);
+    col += (u_sun_color * 0.12 + diffuse * 0.2) * rim_mask * (0.35 + u_rim);
+    col += emission;
   } else {
     vec3 f0 = mix(vec3(0.04), base, metal);
     vec3 L = -u_sun_dir;

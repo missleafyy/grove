@@ -32,13 +32,29 @@ target_include_directories(grove_thirdparty PUBLIC
 target_compile_options(grove_thirdparty PRIVATE -O2 -w)
 
 # ---- LuaJIT (prebuilt static lib) -----------------------------------------
+# Windows cross builds (tools/windows/build.sh) pass GROVE_WIN_DEPS: a folder holding the
+# Windows libluajit.a and a static GLFW install (include/, lib/libglfw3.a).
+if(WIN32)
+  set(LUAJIT_LIB ${GROVE_WIN_DEPS}/libluajit.a)
+else()
+  set(LUAJIT_LIB ${CMAKE_SOURCE_DIR}/third_party/luajit/src/libluajit.a)
+endif()
 add_library(luajit STATIC IMPORTED)
 set_target_properties(luajit PROPERTIES
-  IMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/third_party/luajit/src/libluajit.a
+  IMPORTED_LOCATION ${LUAJIT_LIB}
   INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/third_party/luajit/src)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GLFW REQUIRED IMPORTED_TARGET glfw3)
+if(WIN32)
+  add_library(glfw_win STATIC IMPORTED)
+  set_target_properties(glfw_win PROPERTIES
+    IMPORTED_LOCATION ${GROVE_WIN_DEPS}/glfw/lib/libglfw3.a
+    INTERFACE_INCLUDE_DIRECTORIES ${GROVE_WIN_DEPS}/glfw/include)
+  set(GROVE_PLATFORM_LIBS glfw_win opengl32 gdi32 user32 shell32 winmm ole32)
+else()
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(GLFW REQUIRED IMPORTED_TARGET glfw3)
+  set(GROVE_PLATFORM_LIBS PkgConfig::GLFW dl m pthread)
+endif()
 
 # ---- Engine ----------------------------------------------------------------
 add_executable(grove
@@ -50,8 +66,14 @@ add_executable(grove
   src/input.cpp
   src/meshload.cpp)
 target_include_directories(grove PRIVATE src)
-target_link_libraries(grove PRIVATE grove_thirdparty Jolt luajit PkgConfig::GLFW dl m pthread)
+target_link_libraries(grove PRIVATE grove_thirdparty Jolt luajit ${GROVE_PLATFORM_LIBS})
 target_compile_options(grove PRIVATE -O2 -Wall -Wno-unused-function -Wno-missing-field-initializers)
 # Export symbols so LuaJIT's FFI (ffi.C) can see the engine's C API.
 set_target_properties(grove PROPERTIES ENABLE_EXPORTS ON
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+if(WIN32)
+  # ffi.C on Windows looks the gr_* functions up in the .exe's export table; static C/C++ runtimes
+  # keep the build to a single grove.exe.
+  target_link_options(grove PRIVATE -Wl,--export-all-symbols -static)
+  set_target_properties(grove PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()

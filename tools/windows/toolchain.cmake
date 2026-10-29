@@ -1,0 +1,12 @@
+# CMake toolchain for cross-compiling Grove to Windows x64 with zig (see tools/windows/build.sh).
+set(CMAKE_SYSTEM_NAME Windows)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+set(_w ${CMAKE_CURRENT_LIST_DIR})
+set(CMAKE_C_COMPILER ${_w}/zig-cc)
+set(CMAKE_CXX_COMPILER ${_w}/zig-c++)
+set(CMAKE_AR ${_w}/zig-ar CACHE FILEPATH "")
+set(CMAKE_RANLIB ${_w}/zig-ranlib CACHE FILEPATH "")
+set(CMAKE_RC_COMPILER ${_w}/zig-rc)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)

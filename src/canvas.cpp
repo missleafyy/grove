@@ -1,3 +1,4 @@
+#include <cmath>
 // 2D canvas: batched rounded rects, images and SDF text drawn over the 3D frame.
 #include "core.hpp"
 #include "stb_truetype.h"
@@ -250,6 +251,52 @@ void gr_draw_text(int font, const char* text, float x, float y, float size, floa
     }
     pen_x += gl.advance * s;
     prev = cp;
+  }
+}
+
+// Convex polygon (screen-space points, either winding) with a feathered ~1px anti-aliased edge.
+void gr_draw_poly(const float* pts, int n, float r, float g, float b, float a) {
+  if (n < 3) return;
+  use_tex(white);
+  static const float zero[4] = {0, 0, 0, 0};
+  float c[4] = {r, g, b, a}, c0[4] = {r, g, b, 0};
+  float params[4] = {2, 0, 0, 0};
+  float area = 0;
+  for (int i = 0; i < n; i++) {
+    int j = (i + 1) % n;
+    area += pts[i * 2] * pts[j * 2 + 1] - pts[j * 2] * pts[i * 2 + 1];
+  }
+  float wind = area > 0 ? 1.0f : -1.0f;
+  // Offset each vertex half a pixel in and out along the averaged edge normals.
+  std::vector<float> in(n * 2), out(n * 2);
+  for (int i = 0; i < n; i++) {
+    int ip = (i + n - 1) % n, in_ = (i + 1) % n;
+    float ex0 = pts[i * 2] - pts[ip * 2], ey0 = pts[i * 2 + 1] - pts[ip * 2 + 1];
+    float ex1 = pts[in_ * 2] - pts[i * 2], ey1 = pts[in_ * 2 + 1] - pts[i * 2 + 1];
+    float l0 = std::sqrt(ex0 * ex0 + ey0 * ey0) + 1e-6f, l1 = std::sqrt(ex1 * ex1 + ey1 * ey1) + 1e-6f;
+    // outward normal for CCW in y-down screen space
+    float nx0 = ey0 / l0 * wind, ny0 = -ex0 / l0 * wind, nx1 = ey1 / l1 * wind, ny1 = -ex1 / l1 * wind;
+    float nx = nx0 + nx1, ny = ny0 + ny1;
+    float nl = std::sqrt(nx * nx + ny * ny) + 1e-6f;
+    nx /= nl; ny /= nl;
+    float k = 0.5f / std::max(0.3f, nx * nx0 + ny * ny0);   // keep the feather 1px wide at corners
+    nx *= k; ny *= k;
+    in[i * 2] = pts[i * 2] - nx; in[i * 2 + 1] = pts[i * 2 + 1] - ny;
+    out[i * 2] = pts[i * 2] + nx; out[i * 2 + 1] = pts[i * 2 + 1] + ny;
+  }
+  for (int i = 1; i + 1 < n; i++) {
+    vtx(in[0], in[1], 0.5f, 0.5f, c, zero, params, zero);
+    vtx(in[i * 2], in[i * 2 + 1], 0.5f, 0.5f, c, zero, params, zero);
+    vtx(in[(i + 1) * 2], in[(i + 1) * 2 + 1], 0.5f, 0.5f, c, zero, params, zero);
+  }
+  for (int i = 0; i < n; i++) {
+    int j = (i + 1) % n;
+    vtx(in[i * 2], in[i * 2 + 1], 0.5f, 0.5f, c, zero, params, zero);
+    vtx(out[i * 2], out[i * 2 + 1], 0.5f, 0.5f, c0, zero, params, zero);
+    vtx(out[j * 2], out[j * 2 + 1], 0.5f, 0.5f, c0, zero, params, zero);
+    vtx(in[i * 2], in[i * 2 + 1], 0.5f, 0.5f, c, zero, params, zero);
+    vtx(out[j * 2], out[j * 2 + 1], 0.5f, 0.5f, c0, zero, params, zero);
+    vtx(in[j * 2], in[j * 2 + 1], 0.5f, 0.5f, c, zero, params, zero);
   }
 }
 

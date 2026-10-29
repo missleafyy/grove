@@ -421,9 +421,9 @@ end
 local mat_fields = {
   albedo = "color4", emission = "color3", emission_energy = "f", roughness = "f", metallic = "f", rim = "f",
   uv_scale = "vec2", alpha_cutoff = "f", wind = "f", texture = "tex", unshaded = "b", transparent = "b",
-  double_sided = "b", vertex_color = "b", effect = "effect", triplanar = "b", no_fog = "b",
+  double_sided = "b", vertex_color = "b", effect = "effect", triplanar = "b", no_fog = "b", uv_offset = "vec2o",
 }
-local effects = { none = 0, water = 1, pulse = 2 }
+local effects = { none = 0, water = 1, pulse = 2, sprite = 3 }
 
 Material = {}
 local MaterialMT = {}
@@ -439,6 +439,8 @@ local function mat_set(self, k, v)
   elseif kind == "color3" then ptr.emission[0], ptr.emission[1], ptr.emission[2] = v.r, v.g, v.b
   elseif kind == "vec2" then
     if type(v) == "number" then ptr.uv_scale[0], ptr.uv_scale[1] = v, v else ptr.uv_scale[0], ptr.uv_scale[1] = v[1] or v.x, v[2] or v.y end
+  elseif kind == "vec2o" then
+    if type(v) == "number" then ptr.uv_offset[0], ptr.uv_offset[1] = v, v else ptr.uv_offset[0], ptr.uv_offset[1] = v[1] or v.x, v[2] or v.y end
   elseif kind == "tex" then ptr.albedo_tex = v and v.id or 0
   elseif kind == "effect" then ptr.effect = type(v) == "number" and v or (effects[v] or 0)
   end

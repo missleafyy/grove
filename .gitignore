@@ -4,3 +4,5 @@ games/*/screenshots/
 third_party/lj.log
 web/vendor/
 web/node_modules/
+build-win/
+dist/

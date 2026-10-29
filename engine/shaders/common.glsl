@@ -24,6 +24,7 @@ uniform float u_fog_sun_scatter;
 uniform float u_clouds;
 uniform float u_cloud_speed;
 uniform float u_stars;
+uniform float u_toon;        // cel shading bands, 0 = off
 
 const float PI = 3.14159265;
 
@@ -50,6 +51,14 @@ float fbm(vec2 p) {
   float s = 0.0, a = 0.5;
   for (int i = 0; i < 5; i++) { s += a * vnoise(p); p = p * 2.03 + vec2(17.1, 9.2); a *= 0.5; }
   return s;
+}
+
+// Quantise a 0..1 light amount into u_toon bands with an anti-aliased step between them.
+float toon_ramp(float x) {
+  float y = clamp(x, 0.0, 1.0) * u_toon;
+  float w = max(fwidth(y), 1e-3) * 0.75;
+  float i = floor(y);
+  return (i + smoothstep(0.5 - w, 0.5 + w, y - i)) / u_toon;
 }
 
 vec3 srgb_to_linear(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }

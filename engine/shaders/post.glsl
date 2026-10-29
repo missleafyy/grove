@@ -80,6 +80,34 @@ vec3 aces(vec3 x) {
   return clamp(m2 * (a / b), 0.0, 1.0);
 }
 
+uniform sampler2D u_depth;
+uniform float u_outline;
+uniform vec3 u_outline_color;
+uniform float u_outline_fade;
+uniform vec2 u_near_far;
+
+float view_z(vec2 uv) {
+  float d = texture(u_depth, uv).r * 2.0 - 1.0;
+  float n = u_near_far.x, f = u_near_far.y;
+  return 2.0 * n * f / (f + n - d * (f - n));
+}
+
+// Ink lines from depth: 1/z is linear across any flat surface in screen space, so its Laplacian is
+// zero on planes (no lines on floors at grazing angles) and spikes at silhouettes and creases.
+float ink(vec2 uv) {
+  vec2 o = u_src_texel * u_outline;
+  float zc = view_z(uv);
+  float c = 1.0 / zc;
+  float a = 1.0 / view_z(uv + vec2(o.x, 0)) + 1.0 / view_z(uv - vec2(o.x, 0)) - 2.0 * c;
+  float b = 1.0 / view_z(uv + vec2(0, o.y)) + 1.0 / view_z(uv - vec2(0, o.y)) - 2.0 * c;
+  float d1 = 1.0 / view_z(uv + o) + 1.0 / view_z(uv - o) - 2.0 * c;
+  float d2 = 1.0 / view_z(uv + vec2(o.x, -o.y)) + 1.0 / view_z(uv - vec2(o.x, -o.y)) - 2.0 * c;
+  // Only the nearer side of an edge draws (negative curvature), so lines hug the foreground object.
+  float e = max(max(-a, -b), max(-d1, -d2) * 0.7) * zc;
+  float line = smoothstep(0.03, 0.09, e);
+  return line * (1.0 - smoothstep(u_outline_fade * 0.5, u_outline_fade, zc));
+}
+
 void main() {
   vec3 hdr = texture(u_src, v_uv).rgb;
   vec3 bloom = texture(u_bloom, v_uv).rgb;
@@ -87,6 +115,7 @@ void main() {
   c = aces(c);
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   c = mix(vec3(l), c, u_saturation);
+  if (u_outline > 0.0) c = mix(c, u_outline_color, ink(v_uv) * 0.92);
   c = pow(c, vec3(1.0 / 2.2));
   c = (c - 0.5) * u_contrast + 0.5;
   vec2 q = v_uv - 0.5;

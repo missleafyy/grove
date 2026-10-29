@@ -1,9 +1,16 @@
 -- Save: persist plain Lua tables (numbers, strings, booleans, nested tables).
--- Files live in ~/.local/share/grove/<game folder name>/<name>.save
+-- Files live in ~/.local/share/grove/<game folder name>/<name>.save (on Windows: %APPDATA%/grove/<game>/).
 Save = {}
 
 local function dir()
   local game = GROVE_GAME_DIR:match("([^/]+)/*$") or "game"
+  if jit.os == "Windows" then
+    local root = (os.getenv("APPDATA") or os.getenv("USERPROFILE") or "."):gsub("\\", "/")
+    local base = root .. "/grove/" .. game
+    os.execute('mkdir "' .. (root .. "/grove"):gsub("/", "\\") .. '" 2>nul')
+    os.execute('mkdir "' .. base:gsub("/", "\\") .. '" 2>nul')
+    return base
+  end
   local base = (os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share")) .. "/grove/" .. game
   os.execute('mkdir -p "' .. base .. '"')
   return base

@@ -201,7 +201,7 @@ end
 ------------------------------------------------------------------ Environment
 -- Global proxy over the renderer's environment: Environment.sky_top = Color(...)
 local env_ptr = C.gr_environment()
-local env_colors = { sky_top = true, sky_horizon = true, ground = true, sun_color = true, fog_color = true, clear_color = true }
+local env_colors = { sky_top = true, sky_horizon = true, ground = true, sun_color = true, fog_color = true, clear_color = true, outline_color = true }
 local env_vecs = { sun_dir = true, moon_dir = true }
 local env_bools = { sun_shadows = true, sky_enabled = true }
 

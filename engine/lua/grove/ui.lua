@@ -26,12 +26,29 @@ function Draw.shadow(x, y, w, h, radius, blur, alpha)
   local s = S()
   C.gr_draw_shadow(x * s, y * s, w * s, h * s, (radius or 0) * s, (blur or 12) * s, (alpha or 0.35) * Draw.alpha)
 end
+-- Convex polygon from a flat list {x1, y1, x2, y2, ...} (anti-aliased edges).
+local poly_buf = ffi.new("float[64]")
+function Draw.poly(pts, c)
+  local s, n = S(), math.min(#pts, 64)
+  for i = 1, n do poly_buf[i - 1] = pts[i] * s end
+  C.gr_draw_poly(poly_buf, math.floor(n / 2), c.r, c.g, c.b, c.a * Draw.alpha)
+end
+-- Parallelogram slanted by `skew` pixels (top edge shifted right): the comic-panel shape.
+function Draw.slant(x, y, w, h, skew, c)
+  Draw.poly({ x + skew, y, x + w + skew, y, x + w, y + h, x, y + h }, c)
+end
 function Draw.circle(x, y, r, c) Draw.rect(x - r, y - r, r * 2, r * 2, c, r) end
 function Draw.ring(x, y, r, c, thickness) Draw.rect_border(x - r, y - r, r * 2, r * 2, c, r, thickness or 2) end
 function Draw.image(tex, x, y, w, h, c)
   local s = S()
   c = c or Color.WHITE
   C.gr_draw_image(tex.id, x * s, y * s, (w or tex.width) * s, (h or tex.height) * s, 0, 0, 1, 1, c.r, c.g, c.b, c.a * Draw.alpha)
+end
+-- Part of a texture: uv rect u0, v0 .. u1, v1 (0..1).
+function Draw.image_region(tex, x, y, w, h, u0, v0, u1, v1, c)
+  local s = S()
+  c = c or Color.WHITE
+  C.gr_draw_image(tex.id, x * s, y * s, w * s, h * s, u0, v0, u1, v1, c.r, c.g, c.b, c.a * Draw.alpha)
 end
 function Draw.text_width(text, size, font)
   return C.gr_text_width(font or Font.bold, tostring(text), (size or 20) * S()) / S()

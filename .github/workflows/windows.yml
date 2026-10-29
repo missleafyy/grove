@@ -1,0 +1,42 @@
+# Builds the Windows version of CARL 4 (cross-compiled with zig on Linux, see tools/windows/build.sh)
+# and publishes it as the "carl4-windows" release, so there is always a zip to download and play.
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zig
+        run: |
+          mkdir -p "$HOME/zig" && cd "$HOME/zig"
+          curl -sSLo zig.tar.xz https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz
+          echo "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026  zig.tar.xz" | sha256sum -c
+          tar xf zig.tar.xz
+          echo "ZIG=$HOME/zig/zig-x86_64-linux-0.17.0/zig" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: tools/windows/build.sh carl4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carl4-windows
+          path: dist/carl4-windows.zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete carl4-windows --yes --cleanup-tag || true
+          gh release create carl4-windows dist/carl4-windows.zip \
+            --title "CARL 4 for Windows" --target "$GITHUB_SHA" \
+            --notes "Download carl4-windows.zip, unzip it anywhere, and double-click **Play CARL 4.bat**. Needs a GPU with OpenGL 4.5. Built automatically from $GITHUB_SHA."

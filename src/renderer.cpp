@@ -60,7 +60,7 @@ static GLuint shadow_tex, shadow_fbo;
 static const int SHADOW_RES = 2048, CASCADES = 3;
 static M4 shadow_mats[CASCADES];
 static float shadow_splits[CASCADES], shadow_texel[CASCADES];
-static GLuint msaa_fbo, msaa_color, msaa_depth, resolve_fbo, resolve_tex;
+static GLuint msaa_fbo, msaa_color, msaa_depth, resolve_fbo, resolve_tex, resolve_depth;
 static int fb_w = 0, fb_h = 0;
 static const int BLOOM_MIPS = 6;
 static GLuint bloom_tex[BLOOM_MIPS], bloom_fbo[BLOOM_MIPS];
@@ -177,6 +177,7 @@ static void set_env_defaults() {
   e.moon_dir[0] = 0.3f; e.moon_dir[1] = -0.6f; e.moon_dir[2] = 0.74f;
   e.exposure = 1; e.bloom_strength = 0.08f; e.bloom_threshold = 1.0f; e.saturation = 1.05f; e.contrast = 1.03f; e.vignette = 0.25f;
   e.sky_enabled = 1;
+  e.outline_fade = 120;
   env = e;
 }
 
@@ -257,7 +258,7 @@ bool renderer_init() {
 static void destroy_targets() {
   if (!fb_w) return;
   glDeleteFramebuffers(1, &msaa_fbo); glDeleteRenderbuffers(1, &msaa_color); glDeleteRenderbuffers(1, &msaa_depth);
-  glDeleteFramebuffers(1, &resolve_fbo); glDeleteTextures(1, &resolve_tex);
+  glDeleteFramebuffers(1, &resolve_fbo); glDeleteTextures(1, &resolve_tex); glDeleteTextures(1, &resolve_depth);
   glDeleteFramebuffers(BLOOM_MIPS, bloom_fbo); glDeleteTextures(BLOOM_MIPS, bloom_tex);
   fb_w = fb_h = 0;
 }
@@ -277,6 +278,8 @@ static void ensure_targets(int w, int h) {
   resolve_tex = make_tex2d(w, h, GL_RGBA16F, GL_LINEAR, GL_CLAMP_TO_EDGE);
   glCreateFramebuffers(1, &resolve_fbo);
   glNamedFramebufferTexture(resolve_fbo, GL_COLOR_ATTACHMENT0, resolve_tex, 0);
+  resolve_depth = make_tex2d(w, h, GL_DEPTH_COMPONENT32F, GL_NEAREST, GL_CLAMP_TO_EDGE);
+  glNamedFramebufferTexture(resolve_fbo, GL_DEPTH_ATTACHMENT, resolve_depth, 0);
 
   int bw = w, bh = h;
   for (int i = 0; i < BLOOM_MIPS; i++) {
@@ -676,6 +679,7 @@ static void bind_material(GLuint p, const GrMaterial* m, bool depth_only) {
   set1i(p, "u_vertex_color", m->vertex_color);
   set1f(p, "u_alpha_cutoff", m->alpha_cutoff);
   set2f(p, "u_uv_scale", m->uv_scale[0], m->uv_scale[1]);
+  set2f(p, "u_uv_offset", m->uv_offset[0], m->uv_offset[1]);
   set1i(p, "u_has_tex", m->albedo_tex != 0);
   set1i(p, "u_triplanar", m->triplanar);
   glBindTextureUnit(0, renderer_texture_gl(m->albedo_tex));
@@ -723,6 +727,7 @@ static void set_frame_uniforms(GLuint p, const M4& vp) {
   set1f(p, "u_clouds", env.clouds);
   set1f(p, "u_cloud_speed", env.cloud_speed);
   set1f(p, "u_stars", env.stars);
+  set1f(p, "u_toon", env.toon);
 }
 
 struct DrawItem { int kind; int id; float dist; };  // kind 0 instance, 1 multimesh
@@ -1039,6 +1044,9 @@ void renderer_render(int w, int h, float dt) {
     line_data.clear();
   }
 
+  // Opaque depth for the ink outline pass (before transparents, so glass and particles get none).
+  if (env.outline > 0) glBlitNamedFramebuffer(msaa_fbo, resolve_fbo, 0, 0, w, h, 0, 0, w, h, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
   // Transparent geometry, back to front.
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1065,8 +1073,16 @@ void renderer_render(int w, int h, float dt) {
   set1f(prog_composite, "u_contrast", env.contrast);
   set1f(prog_composite, "u_vignette", env.vignette);
   set1f(prog_composite, "u_time", g_rtime);
+  set1f(prog_composite, "u_outline", env.outline * h / 720.0f);
+  float oc[3]; lin3(env.outline_color, oc);
+  set3f(prog_composite, "u_outline_color", oc);
+  set1f(prog_composite, "u_outline_fade", env.outline_fade);
+  set2f(prog_composite, "u_near_far", cam_near, cam_far);
+  set2f(prog_composite, "u_src_texel", 1.0f / w, 1.0f / h);
+  set1i(prog_composite, "u_depth", 2);
   glBindTextureUnit(0, resolve_tex);
   glBindTextureUnit(1, bloom_tex[0]);
+  glBindTextureUnit(2, resolve_depth);
   glBindVertexArray(empty_vao);
   glDrawArrays(GL_TRIANGLES, 0, 3);
   glEnable(GL_DEPTH_TEST);

@@ -62,6 +62,7 @@ typedef struct GrMaterial {
   int   effect;           /* 0 standard, 1 water, 2 hologram/pulse */
   int   triplanar;        /* world-space triplanar mapping of albedo_tex */
   int   no_fog;
+  float uv_offset[2];      /* added after uv_scale (sprite atlases) */
 } GrMaterial;
 
 typedef struct GrLight {
@@ -105,6 +106,10 @@ typedef struct GrEnvironment {
   float vignette;
   float clear_color[3];
   int   sky_enabled;
+  float toon;             /* cel shading: number of light bands, 0 = off (PBR) */
+  float outline;          /* ink outline width in 720p pixels, 0 = off */
+  float outline_color[3];
+  float outline_fade;     /* view distance where outlines have faded out */
 } GrEnvironment;
 
 typedef struct GrParticleConfig {
@@ -195,6 +200,7 @@ void   gr_draw_rect_border(float x, float y, float w, float h, float r, float g,
 void   gr_draw_rect_gradient(float x, float y, float w, float h, float r1, float g1, float b1, float a1, float r2, float g2, float b2, float a2, float radius);
 void   gr_draw_image(int tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, float r, float g, float b, float a);
 void   gr_draw_text(int font, const char* text, float x, float y, float size, float r, float g, float b, float a, float outline, float or_, float og, float ob, float oa);
+void   gr_draw_poly(const float* pts, int n, float r, float g, float b, float a);
 void   gr_draw_shadow(float x, float y, float w, float h, float radius, float blur, float a);
 
 /* ------------------------------------------------------------- physics */

@@ -15,6 +15,16 @@ Dev keys (always available): **F5** hot-restart (reloads Lua and shaders), **F3*
 Automated runs: `bin/grove games/x --frames N --hidden --shot out.png` steps N frames at a fixed 1/60 s and
 saves the last frame. `--restart-loop` hot-restarts repeatedly as a teardown self-test.
 
+## Playing on Windows
+
+**CARL 4** (`games/carl4`) has a ready-made Windows build: open the repo's
+[Releases](https://github.com/missleafyy/grove/releases/tag/carl4-windows) page, download
+`carl4-windows.zip`, unzip it, and double-click **Play CARL 4.bat**. It needs a GPU with OpenGL 4.5.
+
+GitHub Actions rebuilds that zip on every push to `main` (`.github/workflows/windows.yml`). To build it
+yourself from Linux, run `tools/windows/build.sh [game]`. The script cross-compiles with
+[zig](https://ziglang.org), fetches and builds GLFW 3.4 once, and writes `dist/<game>-windows.zip`.
+
 ## Layout
 
 | Path | What |
@@ -24,6 +34,7 @@ saves the last frame. `--restart-loop` hot-restarts repeatedly as a teardown sel
 | `engine/shaders/` | GLSL. `main.glsl` is the PBR surface shader; edit and press F5. |
 | `engine/lua/grove/` | The Lua side: node tree, math, resources, physics/UI nodes, game loop. |
 | `games/demo/` | Showcase game "Skylight Isle". `shots.lua` is its screenshot tour (`--shots <dir>`). |
+| `games/carl4/` | "CARL 4": cel-shaded looter-shooter ARPG in Nevada (guns, loot, tractor-beam physics puzzles, boss). |
 
 ## Scripting model (like Godot)
 
@@ -55,6 +66,7 @@ Node API: `add_child, remove_child, queue_free, get("A/B"), find(name|Class), fi
 `Label3D {text, size, color}` (world-anchored text), `AudioPlayer3D {sound, volume, pitch, loop, autoplay, positional}`.
 
 **Environment** (global): `sky_top, sky_horizon, ground, sun_dir, sun_color, sun_energy, ambient_energy, reflection_energy, fog_color, fog_density, fog_height, fog_height_density, clouds, cloud_speed, stars, moon_dir, exposure, bloom_strength, bloom_threshold, saturation, contrast, vignette, sun_shadows, shadow_distance, sky_enabled`. `Environment:set{...}`.
+Cel shading: `toon` (number of light bands, 0 = PBR), `outline` (ink line width in 720p px, 0 = off), `outline_color`, `outline_fade` (view distance where lines fade out). Lines come from depth, so they skip transparents and particles.
 
 **Physics** (Jolt): `StaticBody3D`, `RigidBody3D {mass, friction, bounce, linear_damp, angular_damp, gravity_scale, ccd}` (+ `apply_impulse, set_velocity, get_velocity, teleport`; signal `body_entered(other, {point, normal, speed})`),
 `AnimatableBody3D` (move it in code; carries characters), `CharacterBody3D {radius, height, max_slope, step_height}` (origin at feet; set `velocity`, call `move_and_slide()`, `is_on_floor()`),
@@ -62,7 +74,7 @@ Node API: `add_child, remove_child, queue_free, get("A/B"), find(name|Class), fi
 Queries: `Physics.raycast(from, to, exclude) -> {node, position, normal, distance}`, `Physics.overlap_sphere(c, r)`, `Physics.set_gravity(v)`.
 
 **Resources**: `MeshData` builder (`box sphere icosphere cylinder cone capsule torus grid plane`, `:append(md, pos, rot, scale) :transform :paint :paint_fn :displace :flat :smooth_normals :copy :upload()`; vertex colours are first-class),
-`Material {albedo, roughness, metallic, emission, emission_energy, texture, uv_scale, triplanar, transparent, double_sided, unshaded, alpha_cutoff, wind, rim, effect = "water"|"pulse", no_fog}`,
+`Material {albedo, roughness, metallic, emission, emission_energy, texture, uv_scale, triplanar, transparent, double_sided, unshaded, alpha_cutoff, wind, rim, effect = "water"|"pulse"|"sprite", no_fog, uv_offset}`,
 `Texture.load(path) / generate(w, h, fn) / checker`, `Model.load(path)` / `Model.instance(path)` (glTF/OBJ), `Font.load(path)`. Paths are relative to the game folder.
 
 **Audio**: `Sound.load(path)` (wav/mp3/flac/ogg), `Sound.preset("coin"|"jump"|"land"|"laser"|"explosion"|"hit"|"powerup"|"blip"|"select"|"thud"|"whoosh"|"step"|"chime"|"bounce", variation)`,
@@ -73,7 +85,7 @@ Queries: `Physics.raycast(from, to, exclude) -> {node, position, normal, distanc
 `Input.pressed/down/released/strength(a)`, `Input.vector(l, r, f, b)`, `Input.mouse_delta()`, `Input.capture_mouse(on)`, `Input.look_stick()`, `Input.simulate(a, down)`.
 
 **UI**: Control nodes `Panel, Label, Button (signal "pressed" / on_pressed), ProgressBar, TextureRect, VBox, HBox` with `anchor` (`top_left`…`bottom_right`, `center`, `full`) + `x, y, w, h`.
-Coordinates are virtual 720p-height pixels (scaled to the window). Immediate drawing in any `_draw_ui`: `Draw.rect/rect_border/gradient/shadow/circle/ring/image/text/text_width`. Keyboard/gamepad navigate buttons automatically.
+Coordinates are virtual 720p-height pixels (scaled to the window). Immediate drawing in any `_draw_ui`: `Draw.rect/rect_border/gradient/shadow/circle/ring/image/image_region/text/text_width`, plus `Draw.poly({x1,y1,...}, color)` (convex, anti-aliased) and `Draw.slant(x, y, w, h, skew, color)` (parallelogram). Keyboard/gamepad navigate buttons automatically.
 
 **Flow**: `Game.start(node|fn)`, `Game.change_scene`, `Game.paused`, `Game.time_scale`, `Game.time/delta`, `Game.group(name)`,
 `Game.after(s, fn)`, `Game.every(s, fn)`, coroutines `Game.spawn(fn)` / `node:spawn(fn)` with `wait(s)`, `wait_frames(n)`, `wait_until(fn)`, `wait_signal(node, sig)`.
