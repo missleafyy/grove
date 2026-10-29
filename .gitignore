@@ -1,0 +1,4 @@
+build/
+bin/
+games/*/screenshots/
+third_party/lj.log
